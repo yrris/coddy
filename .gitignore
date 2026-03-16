@@ -1,5 +1,6 @@
 ### CUSTOM ###
 tmp
+.env
 
 HELP.md
 target/

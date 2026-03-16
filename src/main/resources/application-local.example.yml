@@ -17,3 +17,5 @@ app:
   cors:
     allowed-origins:
       - http://localhost:5173
+  auth:
+    frontend-url: http://localhost:5173

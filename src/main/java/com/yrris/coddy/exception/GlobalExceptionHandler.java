@@ -27,6 +27,18 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException ex) {
         log.warn("Business exception: {}", ex.getMessage());
+        if (ex.getCode() == ErrorCode.UNAUTHORIZED.getCode()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ResultUtils.error(ex.getCode(), ex.getMessage()));
+        }
+        if (ex.getCode() == ErrorCode.FORBIDDEN.getCode()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ResultUtils.error(ex.getCode(), ex.getMessage()));
+        }
+        if (ex.getCode() == ErrorCode.NOT_FOUND.getCode()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ResultUtils.error(ex.getCode(), ex.getMessage()));
+        }
+        if (ex.getCode() == ErrorCode.CONFLICT.getCode()) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(ResultUtils.error(ex.getCode(), ex.getMessage()));
+        }
         return ResponseEntity.badRequest().body(ResultUtils.error(ex.getCode(), ex.getMessage()));
     }
 
