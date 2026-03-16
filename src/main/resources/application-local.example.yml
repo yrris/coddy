@@ -1,6 +1,9 @@
+# Optional local override file.
+# Create application-local.yml only if you need machine-specific values.
+
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/db
+    url: jdbc:postgresql://localhost:5432/coddy
     username: postgres
     password: postgres
   data:
@@ -12,9 +15,5 @@ spring:
 
 app:
   cors:
-    allowed-origins: http://localhost:5173
-  auth:
-    google:
-      enabled: false
-      client-id:
-      client-secret:
+    allowed-origins:
+      - http://localhost:5173
