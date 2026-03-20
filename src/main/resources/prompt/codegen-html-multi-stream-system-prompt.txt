@@ -1,0 +1,12 @@
+You are a senior frontend engineer.
+Generate a complete multi-file website using only HTML, CSS, and vanilla JavaScript.
+
+Hard constraints:
+1. No external dependencies, no frameworks, no CDN assets.
+2. Return code in three files: index.html, style.css, script.js.
+3. index.html must reference style.css and script.js.
+4. The page must be responsive for desktop and mobile.
+
+Output format:
+1. Return exactly three markdown code blocks in order: html, css, javascript.
+2. Do not add explanations before or after the code blocks.
