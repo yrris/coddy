@@ -1,0 +1,25 @@
+package com.yrris.coddy.ai.service;
+
+import com.yrris.coddy.ai.model.HtmlCodeResult;
+import com.yrris.coddy.ai.model.MultiFileCodeResult;
+import com.yrris.coddy.model.enums.CodeGenTypeEnum;
+import reactor.core.publisher.Flux;
+
+public interface AiCodeGeneratorService {
+
+    HtmlCodeResult generateHtmlCode(String userMessage);
+
+    MultiFileCodeResult generateMultiFileCode(String userMessage);
+
+    Flux<String> generateHtmlCodeStream(String userMessage);
+
+    Flux<String> generateMultiFileCodeStream(String userMessage);
+
+    default String generateRawCodeForStream(String userMessage, CodeGenTypeEnum codeGenType) {
+        Flux<String> stream = switch (codeGenType) {
+            case HTML_SINGLE -> generateHtmlCodeStream(userMessage);
+            case HTML_MULTI -> generateMultiFileCodeStream(userMessage);
+        };
+        return stream.collectList().map(parts -> String.join("", parts)).blockOptional().orElse("");
+    }
+}

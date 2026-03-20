@@ -86,3 +86,34 @@ app:
       enabled: ${GOOGLE_AUTH_ENABLED:false}
       client-id: ${GOOGLE_CLIENT_ID:}
       client-secret: ${GOOGLE_CLIENT_SECRET:}
+  ai:
+    provider: ${AI_PROVIDER:langchain4j}
+    base-url: ${AI_BASE_URL:https://api.openai.com/v1}
+    api-key: ${AI_API_KEY:}
+    model: ${AI_MODEL:gpt-5-mini}
+    max-tokens: ${AI_MAX_TOKENS:4096}
+    temperature: ${AI_TEMPERATURE:0.2}
+    stream-chunk-size: ${AI_STREAM_CHUNK_SIZE:64}
+    stream-delay-ms: ${AI_STREAM_DELAY_MS:20}
+    output-root-dir: ${AI_OUTPUT_ROOT_DIR:tmp/code_output}
+
+langchain4j:
+  open-ai:
+    chat-model:
+      base-url: ${AI_BASE_URL:https://api.openai.com/v1}
+      api-key: ${AI_API_KEY:placeholder-key}
+      model-name: ${AI_MODEL:gpt-5-mini}
+      max-tokens: ${AI_MAX_TOKENS:4096}
+      temperature: ${AI_TEMPERATURE:0.2}
+      strict-json-schema: ${AI_STRICT_JSON_SCHEMA:false}
+      response-format: ${AI_RESPONSE_FORMAT:json_object}
+      log-requests: ${AI_LOG_REQUESTS:false}
+      log-responses: ${AI_LOG_RESPONSES:false}
+    streaming-chat-model:
+      base-url: ${AI_BASE_URL:https://api.openai.com/v1}
+      api-key: ${AI_API_KEY:placeholder-key}
+      model-name: ${AI_MODEL:gpt-4o-mini}
+      max-tokens: ${AI_MAX_TOKENS:4096}
+      temperature: ${AI_TEMPERATURE:0.2}
+      log-requests: ${AI_LOG_REQUESTS:false}
+      log-responses: ${AI_LOG_RESPONSES:false}

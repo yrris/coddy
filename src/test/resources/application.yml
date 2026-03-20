@@ -13,3 +13,7 @@ spring:
     enabled: false
   session:
     store-type: none
+
+app:
+  ai:
+    provider: mock
