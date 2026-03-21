@@ -22,7 +22,11 @@ public class HtmlSingleCodeParser implements CodeParser<HtmlCodeResult> {
         if (StringUtils.hasText(htmlCode)) {
             result.setHtmlCode(htmlCode.trim());
         } else {
-            result.setHtmlCode(normalizedContent.trim());
+            result.setHtmlCode("<!doctype html>\n<html lang=\"en\">\n<head><meta charset=\"UTF-8\"/>"
+                    + "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1.0\"/>"
+                    + "<title>Generated Site</title></head>\n<body>\n"
+                    + "<main>Generated content is unavailable — no HTML code block found.</main>\n"
+                    + "</body>\n</html>");
         }
 
         return result;

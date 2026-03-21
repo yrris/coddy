@@ -26,14 +26,30 @@ public class CodeFileSaverExecutor {
     }
 
     public File executeSaver(Object codeResult, CodeGenTypeEnum codeGenType) {
+        return executeSaver(codeResult, codeGenType, null);
+    }
+
+    public File executeSaver(Object codeResult, CodeGenTypeEnum codeGenType, Long appId) {
         if (codeGenType == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "Code generation type is required");
         }
         return switch (codeGenType) {
-            case HTML_SINGLE -> htmlSingleCodeFileSaver.saveCode((com.yrris.coddy.ai.model.HtmlCodeResult) codeResult,
-                    CodeGenTypeEnum.HTML_SINGLE);
-            case HTML_MULTI -> htmlMultiCodeFileSaver.saveCode((com.yrris.coddy.ai.model.MultiFileCodeResult) codeResult,
-                    CodeGenTypeEnum.HTML_MULTI);
+            case HTML_SINGLE -> {
+                if (appId == null) {
+                    yield htmlSingleCodeFileSaver.saveCode((com.yrris.coddy.ai.model.HtmlCodeResult) codeResult,
+                            CodeGenTypeEnum.HTML_SINGLE);
+                }
+                yield htmlSingleCodeFileSaver.saveCode((com.yrris.coddy.ai.model.HtmlCodeResult) codeResult,
+                        CodeGenTypeEnum.HTML_SINGLE, appId);
+            }
+            case HTML_MULTI -> {
+                if (appId == null) {
+                    yield htmlMultiCodeFileSaver.saveCode((com.yrris.coddy.ai.model.MultiFileCodeResult) codeResult,
+                            CodeGenTypeEnum.HTML_MULTI);
+                }
+                yield htmlMultiCodeFileSaver.saveCode((com.yrris.coddy.ai.model.MultiFileCodeResult) codeResult,
+                        CodeGenTypeEnum.HTML_MULTI, appId);
+            }
         };
     }
 }

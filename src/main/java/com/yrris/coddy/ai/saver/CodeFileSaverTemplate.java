@@ -28,6 +28,13 @@ public abstract class CodeFileSaverTemplate<T> {
         return new File(baseDirPath);
     }
 
+    public final File saveCode(T result, CodeGenTypeEnum codeGenType, Long appId) {
+        validateInput(result);
+        String baseDirPath = buildUniqueDir(codeGenType, appId);
+        saveFiles(result, baseDirPath);
+        return new File(baseDirPath);
+    }
+
     protected void validateInput(T result) {
         if (result == null) {
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "Code result cannot be null");
@@ -36,6 +43,20 @@ public abstract class CodeFileSaverTemplate<T> {
 
     protected final String buildUniqueDir(CodeGenTypeEnum codeGenType) {
         String uniqueDirName = codeGenType.getValue().toLowerCase() + "_" + UUID.randomUUID().toString().replace("-", "");
+        Path dirPath = Paths.get(outputRootDir, uniqueDirName);
+        try {
+            Files.createDirectories(dirPath);
+        } catch (IOException e) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "Failed to create output directory");
+        }
+        return dirPath.toAbsolutePath().toString();
+    }
+
+    protected final String buildUniqueDir(CodeGenTypeEnum codeGenType, Long appId) {
+        if (appId == null || appId <= 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "App id is required");
+        }
+        String uniqueDirName = codeGenType.getValue().toLowerCase() + "_" + appId;
         Path dirPath = Paths.get(outputRootDir, uniqueDirName);
         try {
             Files.createDirectories(dirPath);

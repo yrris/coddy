@@ -17,5 +17,17 @@ app:
   cors:
     allowed-origins:
       - http://localhost:5173
+  deploy:
+    host: http://localhost
   auth:
     frontend-url: http://localhost:5173
+  ai:
+    provider: langchain4j
+    base-url: https://api.openai.com/v1
+    api-key:
+    model: gpt-4o-mini
+    max-tokens: 4096
+    temperature: 0.2
+    stream-chunk-size: 64
+    stream-delay-ms: 20
+    output-root-dir: tmp/code_output

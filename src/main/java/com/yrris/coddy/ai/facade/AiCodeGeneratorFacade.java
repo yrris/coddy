@@ -43,17 +43,34 @@ public class AiCodeGeneratorFacade {
     }
 
     public CodeGenerationOutput generateAndSaveCode(String userMessage, CodeGenTypeEnum codeGenType) {
+        return generateAndSaveCode(userMessage, codeGenType, null);
+    }
+
+    public CodeGenerationOutput generateAndSaveCode(String userMessage, CodeGenTypeEnum codeGenType, Long appId) {
         return switch (codeGenType) {
             case HTML_SINGLE -> {
                 HtmlCodeResult result = aiCodeGeneratorService.generateHtmlCode(userMessage);
-                yield saveStructuredResult(result, CodeGenTypeEnum.HTML_SINGLE);
+                yield saveStructuredResult(result, CodeGenTypeEnum.HTML_SINGLE, appId);
             }
             case HTML_MULTI -> {
                 MultiFileCodeResult result = aiCodeGeneratorService.generateMultiFileCode(userMessage);
-                yield saveStructuredResult(result, CodeGenTypeEnum.HTML_MULTI);
+                yield saveStructuredResult(result, CodeGenTypeEnum.HTML_MULTI, appId);
             }
             default -> throw new BusinessException(ErrorCode.PARAMS_ERROR, "Unsupported code generation type");
         };
+    }
+
+    public Flux<String> generateAndSaveCodeStream(String userMessage, CodeGenTypeEnum codeGenType, Long appId) {
+        Flux<String> codeStream = switch (codeGenType) {
+            case HTML_SINGLE -> aiCodeGeneratorService.generateHtmlCodeStream(userMessage);
+            case HTML_MULTI -> aiCodeGeneratorService.generateMultiFileCodeStream(userMessage);
+            default -> throw new BusinessException(ErrorCode.PARAMS_ERROR, "Unsupported code generation type");
+        };
+
+        StringBuilder rawResponseBuilder = new StringBuilder();
+        return codeStream
+                .doOnNext(rawResponseBuilder::append)
+                .doOnComplete(() -> parseAndSave(rawResponseBuilder.toString(), codeGenType, appId));
     }
 
     /**
@@ -99,7 +116,7 @@ public class AiCodeGeneratorFacade {
         }
 
         String rawResponse = rawResponseBuilder.toString();
-        return parseAndSave(rawResponse, codeGenType);
+        return parseAndSave(rawResponse, codeGenType, null);
     }
 
 
@@ -143,7 +160,7 @@ public class AiCodeGeneratorFacade {
                     try {
                         String rawResponse = rawResponseBuilder.toString();
                         // after streaming, parse and save files
-                        CodeGenerationOutput output = parseAndSave(rawResponse, codeGenType);
+                        CodeGenerationOutput output = parseAndSave(rawResponse, codeGenType, null);
                         if (onComplete != null) {
                             onComplete.accept(output);
                         }
@@ -156,9 +173,9 @@ public class AiCodeGeneratorFacade {
         );
     }
 
-    private CodeGenerationOutput parseAndSave(String rawResponse, CodeGenTypeEnum codeGenType) {
+    private CodeGenerationOutput parseAndSave(String rawResponse, CodeGenTypeEnum codeGenType, Long appId) {
         Object parsedResult = codeParserExecutor.executeParser(rawResponse, codeGenType);
-        File savedDir = codeFileSaverExecutor.executeSaver(parsedResult, codeGenType);
+        File savedDir = codeFileSaverExecutor.executeSaver(parsedResult, codeGenType, appId);
 
         CodeGenerationOutput output = new CodeGenerationOutput();
         output.setCodeGenType(codeGenType);
@@ -168,8 +185,8 @@ public class AiCodeGeneratorFacade {
         return output;
     }
 
-    private CodeGenerationOutput saveStructuredResult(Object structuredResult, CodeGenTypeEnum codeGenType) {
-        File savedDir = codeFileSaverExecutor.executeSaver(structuredResult, codeGenType);
+    private CodeGenerationOutput saveStructuredResult(Object structuredResult, CodeGenTypeEnum codeGenType, Long appId) {
+        File savedDir = codeFileSaverExecutor.executeSaver(structuredResult, codeGenType, appId);
         Map<String, String> files = buildFileMap(structuredResult, codeGenType);
 
         CodeGenerationOutput output = new CodeGenerationOutput();

@@ -6,6 +6,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 public interface AppUserRepository extends JpaRepository<AppUser, Long> {
@@ -19,4 +21,6 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     Optional<AppUser> findByAuthProviderAndProviderUserIdAndIsDeletedFalse(AuthProviderEnum authProvider, String providerUserId);
 
     Page<AppUser> findAllByIsDeletedFalse(Pageable pageable);
+
+    List<AppUser> findAllByIdInAndIsDeletedFalse(Collection<Long> ids);
 }
