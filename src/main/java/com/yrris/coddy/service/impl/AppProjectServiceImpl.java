@@ -16,6 +16,7 @@ import com.yrris.coddy.model.vo.PageVO;
 import com.yrris.coddy.repository.AppProjectRepository;
 import com.yrris.coddy.repository.AppUserRepository;
 import com.yrris.coddy.service.AppProjectService;
+import com.yrris.coddy.service.ChatHistoryService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -65,16 +66,20 @@ public class AppProjectServiceImpl implements AppProjectService {
 
     private final AppDeployProperties appDeployProperties;
 
+    private final ChatHistoryService chatHistoryService;
+
     public AppProjectServiceImpl(
             AppProjectRepository appProjectRepository,
             AppUserRepository appUserRepository,
             AiCodeGeneratorFacade aiCodeGeneratorFacade,
-            AppDeployProperties appDeployProperties
+            AppDeployProperties appDeployProperties,
+            ChatHistoryService chatHistoryService
     ) {
         this.appProjectRepository = appProjectRepository;
         this.appUserRepository = appUserRepository;
         this.aiCodeGeneratorFacade = aiCodeGeneratorFacade;
         this.appDeployProperties = appDeployProperties;
+        this.chatHistoryService = chatHistoryService;
     }
 
     @Override
@@ -242,7 +247,15 @@ public class AppProjectServiceImpl implements AppProjectService {
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "Unsupported code generation type");
         }
 
-        return aiCodeGeneratorFacade.generateAndSaveCodeStream(message, codeGenTypeEnum, appProject.getId());
+        // Save user message to chat history
+        chatHistoryService.saveChatMessage(appId, "USER", message);
+
+        // Generate code and save AI response on completion
+        Flux<String> aiFlux = aiCodeGeneratorFacade.generateAndSaveCodeStream(message, codeGenTypeEnum, appProject.getId());
+        StringBuilder aiResponseBuilder = new StringBuilder();
+        return aiFlux
+                .doOnNext(aiResponseBuilder::append)
+                .doOnComplete(() -> chatHistoryService.saveChatMessage(appId, "ASSISTANT", aiResponseBuilder.toString()));
     }
 
     @Override
@@ -287,7 +300,7 @@ public class AppProjectServiceImpl implements AppProjectService {
         appProject.setEditTime(Instant.now());
         appProjectRepository.save(appProject);
 
-        return normalizeHost(appDeployProperties.getHost()) + "/" + deployKey + "/";
+        return normalizeHost(appDeployProperties.getHost()) + "/api/deployed/" + deployKey + "/";
     }
 
     private String buildDefaultAppName(String initPrompt) {

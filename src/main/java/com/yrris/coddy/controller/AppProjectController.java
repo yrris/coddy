@@ -10,9 +10,11 @@ import com.yrris.coddy.exception.ErrorCode;
 import com.yrris.coddy.model.dto.app.*;
 import com.yrris.coddy.model.dto.common.DeleteRequest;
 import com.yrris.coddy.model.vo.AppVO;
+import com.yrris.coddy.model.vo.ChatHistoryVO;
 import com.yrris.coddy.model.vo.LoginUserVO;
 import com.yrris.coddy.model.vo.PageVO;
 import com.yrris.coddy.service.AppProjectService;
+import com.yrris.coddy.service.ChatHistoryService;
 import com.yrris.coddy.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -23,6 +25,7 @@ import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -31,12 +34,20 @@ public class AppProjectController {
 
     private final AppProjectService appProjectService;
 
+    private final ChatHistoryService chatHistoryService;
+
     private final UserService userService;
 
     private final ObjectMapper objectMapper;
 
-    public AppProjectController(AppProjectService appProjectService, UserService userService, ObjectMapper objectMapper) {
+    public AppProjectController(
+            AppProjectService appProjectService,
+            ChatHistoryService chatHistoryService,
+            UserService userService,
+            ObjectMapper objectMapper
+    ) {
         this.appProjectService = appProjectService;
+        this.chatHistoryService = chatHistoryService;
         this.userService = userService;
         this.objectMapper = objectMapper;
     }
@@ -138,6 +149,20 @@ public class AppProjectController {
                     }
                 })
                 .concatWith(Mono.just(ServerSentEvent.<String>builder().event("done").data("").build()));
+    }
+
+    @GetMapping("/{appId}/chat/history")
+    @AuthCheck
+    public ApiResponse<List<ChatHistoryVO>> getChatHistory(
+            @PathVariable Long appId,
+            @RequestParam(required = false) Long cursorId,
+            @RequestParam(defaultValue = "20") int pageSize
+    ) {
+        if (appId == null || appId <= 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "Invalid app id");
+        }
+        List<ChatHistoryVO> history = chatHistoryService.listByProject(appId, cursorId, pageSize);
+        return ResultUtils.success(history);
     }
 
     @PostMapping("/deploy")

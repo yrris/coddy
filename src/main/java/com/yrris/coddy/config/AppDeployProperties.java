@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "app.deploy")
 public class AppDeployProperties {
 
-    private String host = "http://localhost";
+    private String host = "http://localhost:8765";
 
     public String getHost() {
         return host;
