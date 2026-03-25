@@ -52,6 +52,16 @@ public class MockAiCodeGeneratorService implements AiCodeGeneratorService {
     }
 
     @Override
+    public Flux<String> generateHtmlCodeStream(long appId, String userMessage) {
+        return generateHtmlCodeStream(userMessage);
+    }
+
+    @Override
+    public Flux<String> generateMultiFileCodeStream(long appId, String userMessage) {
+        return generateMultiFileCodeStream(userMessage);
+    }
+
+    @Override
     public Flux<String> generateMultiFileCodeStream(String userMessage) {
         String prompt = normalizePrompt(userMessage);
         String content = "```html\n"

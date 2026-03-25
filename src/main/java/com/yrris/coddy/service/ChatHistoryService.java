@@ -1,7 +1,9 @@
 package com.yrris.coddy.service;
 
+import com.yrris.coddy.model.dto.chat.ChatHistoryQueryRequest;
 import com.yrris.coddy.model.entity.ChatHistory;
 import com.yrris.coddy.model.vo.ChatHistoryVO;
+import com.yrris.coddy.model.vo.PageVO;
 
 import java.util.List;
 
@@ -12,4 +14,8 @@ public interface ChatHistoryService {
     List<ChatHistoryVO> listByProject(Long projectId, Long cursorId, int pageSize);
 
     long countByProject(Long projectId);
+
+    PageVO<ChatHistoryVO> listByAdmin(ChatHistoryQueryRequest request);
+
+    boolean deleteByAdmin(Long id);
 }

@@ -8,34 +8,45 @@ import reactor.core.publisher.Flux;
 
 /**
  * Production AI service implementation backed by LangChain4j.
+ * Uses AiCodeGeneratorServiceFactory for per-app memory-aware agents.
  */
 @Service
 @ConditionalOnProperty(prefix = "app.ai", name = "provider", havingValue = "langchain4j")
 public class LangChain4jAiCodeGeneratorService implements AiCodeGeneratorService {
 
-    private final LangChain4jCodeGeneratorAgent codeGeneratorAgent;
+    private final AiCodeGeneratorServiceFactory factory;
 
-    public LangChain4jAiCodeGeneratorService(LangChain4jCodeGeneratorAgent codeGeneratorAgent) {
-        this.codeGeneratorAgent = codeGeneratorAgent;
+    public LangChain4jAiCodeGeneratorService(AiCodeGeneratorServiceFactory factory) {
+        this.factory = factory;
     }
 
     @Override
     public HtmlCodeResult generateHtmlCode(String userMessage) {
-        return codeGeneratorAgent.generateHtmlCode(userMessage);
+        return factory.getAgent(0L).generateHtmlCode(0L, userMessage);
     }
 
     @Override
     public MultiFileCodeResult generateMultiFileCode(String userMessage) {
-        return codeGeneratorAgent.generateMultiFileCode(userMessage);
+        return factory.getAgent(0L).generateMultiFileCode(0L, userMessage);
     }
 
     @Override
     public Flux<String> generateHtmlCodeStream(String userMessage) {
-        return codeGeneratorAgent.generateHtmlCodeStream(userMessage);
+        return factory.getAgent(0L).generateHtmlCodeStream(0L, userMessage);
     }
 
     @Override
     public Flux<String> generateMultiFileCodeStream(String userMessage) {
-        return codeGeneratorAgent.generateMultiFileCodeStream(userMessage);
+        return factory.getAgent(0L).generateMultiFileCodeStream(0L, userMessage);
+    }
+
+    @Override
+    public Flux<String> generateHtmlCodeStream(long appId, String userMessage) {
+        return factory.getAgent(appId).generateHtmlCodeStream(appId, userMessage);
+    }
+
+    @Override
+    public Flux<String> generateMultiFileCodeStream(long appId, String userMessage) {
+        return factory.getAgent(appId).generateMultiFileCodeStream(appId, userMessage);
     }
 }

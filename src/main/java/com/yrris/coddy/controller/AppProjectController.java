@@ -8,6 +8,7 @@ import com.yrris.coddy.common.ResultUtils;
 import com.yrris.coddy.exception.BusinessException;
 import com.yrris.coddy.exception.ErrorCode;
 import com.yrris.coddy.model.dto.app.*;
+import com.yrris.coddy.model.dto.chat.ChatHistoryQueryRequest;
 import com.yrris.coddy.model.dto.common.DeleteRequest;
 import com.yrris.coddy.model.vo.AppVO;
 import com.yrris.coddy.model.vo.ChatHistoryVO;
@@ -121,6 +122,20 @@ public class AppProjectController {
     @AuthCheck(mustRole = "ADMIN")
     public ApiResponse<AppVO> getAppByIdByAdmin(@RequestParam Long id) {
         return ResultUtils.success(appProjectService.getAppVOForAdmin(id));
+    }
+
+    @PostMapping("/admin/chat/list/page/vo")
+    @AuthCheck(mustRole = "ADMIN")
+    public ApiResponse<PageVO<ChatHistoryVO>> listChatHistoryByAdmin(
+            @RequestBody(required = false) ChatHistoryQueryRequest request
+    ) {
+        return ResultUtils.success(chatHistoryService.listByAdmin(request));
+    }
+
+    @PostMapping("/admin/chat/delete")
+    @AuthCheck(mustRole = "ADMIN")
+    public ApiResponse<Boolean> deleteChatHistoryByAdmin(@Valid @RequestBody DeleteRequest request) {
+        return ResultUtils.success(chatHistoryService.deleteByAdmin(request.getId()));
     }
 
     @GetMapping(value = "/chat/gen/code", produces = MediaType.TEXT_EVENT_STREAM_VALUE)

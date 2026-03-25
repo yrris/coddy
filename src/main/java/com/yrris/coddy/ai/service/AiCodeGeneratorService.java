@@ -15,6 +15,10 @@ public interface AiCodeGeneratorService {
 
     Flux<String> generateMultiFileCodeStream(String userMessage);
 
+    Flux<String> generateHtmlCodeStream(long appId, String userMessage);
+
+    Flux<String> generateMultiFileCodeStream(long appId, String userMessage);
+
     default String generateRawCodeForStream(String userMessage, CodeGenTypeEnum codeGenType) {
         Flux<String> stream = switch (codeGenType) {
             case HTML_SINGLE -> generateHtmlCodeStream(userMessage);

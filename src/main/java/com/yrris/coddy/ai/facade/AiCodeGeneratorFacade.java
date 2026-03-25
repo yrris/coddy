@@ -62,8 +62,12 @@ public class AiCodeGeneratorFacade {
 
     public Flux<String> generateAndSaveCodeStream(String userMessage, CodeGenTypeEnum codeGenType, Long appId) {
         Flux<String> codeStream = switch (codeGenType) {
-            case HTML_SINGLE -> aiCodeGeneratorService.generateHtmlCodeStream(userMessage);
-            case HTML_MULTI -> aiCodeGeneratorService.generateMultiFileCodeStream(userMessage);
+            case HTML_SINGLE -> appId != null
+                    ? aiCodeGeneratorService.generateHtmlCodeStream(appId, userMessage)
+                    : aiCodeGeneratorService.generateHtmlCodeStream(userMessage);
+            case HTML_MULTI -> appId != null
+                    ? aiCodeGeneratorService.generateMultiFileCodeStream(appId, userMessage)
+                    : aiCodeGeneratorService.generateMultiFileCodeStream(userMessage);
             default -> throw new BusinessException(ErrorCode.PARAMS_ERROR, "Unsupported code generation type");
         };
 
