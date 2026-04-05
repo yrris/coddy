@@ -31,4 +31,6 @@ public interface AppProjectService {
     Flux<String> chatToGenCode(Long appId, String message, LoginUserVO loginUser);
 
     String deployApp(Long appId, LoginUserVO loginUser);
+
+    String generateScreenshot(Long appId, LoginUserVO loginUser);
 }

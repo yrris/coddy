@@ -19,10 +19,14 @@ public interface AiCodeGeneratorService {
 
     Flux<String> generateMultiFileCodeStream(long appId, String userMessage);
 
+    Flux<String> generateReactViteProjectStream(long appId, String userMessage);
+
     default String generateRawCodeForStream(String userMessage, CodeGenTypeEnum codeGenType) {
         Flux<String> stream = switch (codeGenType) {
             case HTML_SINGLE -> generateHtmlCodeStream(userMessage);
             case HTML_MULTI -> generateMultiFileCodeStream(userMessage);
+            case REACT_VITE -> throw new UnsupportedOperationException(
+                    "REACT_VITE uses tool-call streaming, not raw code stream");
         };
         return stream.collectList().map(parts -> String.join("", parts)).blockOptional().orElse("");
     }

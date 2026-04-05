@@ -9,4 +9,6 @@ public interface AppConstant {
     String CODE_OUTPUT_ROOT_DIR = System.getProperty("user.dir") + "/tmp/code_output";
 
     String CODE_DEPLOY_ROOT_DIR = System.getProperty("user.dir") + "/tmp/code_deploy";
+
+    String SCREENSHOT_ROOT_DIR = System.getProperty("user.dir") + "/tmp/screenshots";
 }

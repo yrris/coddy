@@ -5,7 +5,8 @@ import org.springframework.util.StringUtils;
 public enum CodeGenTypeEnum {
 
     HTML_SINGLE("Native HTML single file", "HTML_SINGLE"),
-    HTML_MULTI("Native HTML multi file", "HTML_MULTI");
+    HTML_MULTI("Native HTML multi file", "HTML_MULTI"),
+    REACT_VITE("React Vite project", "REACT_VITE");
 
     private final String text;
     private final String value;

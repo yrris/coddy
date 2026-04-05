@@ -24,6 +24,8 @@ public class CodeParserExecutor {
         return switch (codeGenType) {
             case HTML_SINGLE -> htmlSingleCodeParser.parseCode(codeContent);
             case HTML_MULTI -> htmlMultiCodeParser.parseCode(codeContent);
+            case REACT_VITE -> throw new BusinessException(ErrorCode.INTERNAL_ERROR,
+                    "REACT_VITE uses tool-call mode, not parse pipeline");
         };
     }
 }

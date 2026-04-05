@@ -6,6 +6,7 @@ import com.yrris.coddy.ai.model.MultiFileCodeResult;
 import com.yrris.coddy.ai.parser.CodeParserExecutor;
 import com.yrris.coddy.ai.saver.CodeFileSaverExecutor;
 import com.yrris.coddy.ai.service.AiCodeGeneratorService;
+import com.yrris.coddy.ai.tool.ReactViteProjectInitializer;
 import com.yrris.coddy.exception.BusinessException;
 import com.yrris.coddy.exception.ErrorCode;
 import com.yrris.coddy.model.enums.CodeGenTypeEnum;
@@ -32,14 +33,18 @@ public class AiCodeGeneratorFacade {
 
     private final CodeFileSaverExecutor codeFileSaverExecutor;
 
+    private final ReactViteProjectInitializer reactViteProjectInitializer;
+
     public AiCodeGeneratorFacade(
             AiCodeGeneratorService aiCodeGeneratorService,
             CodeParserExecutor codeParserExecutor,
-            CodeFileSaverExecutor codeFileSaverExecutor
+            CodeFileSaverExecutor codeFileSaverExecutor,
+            ReactViteProjectInitializer reactViteProjectInitializer
     ) {
         this.aiCodeGeneratorService = aiCodeGeneratorService;
         this.codeParserExecutor = codeParserExecutor;
         this.codeFileSaverExecutor = codeFileSaverExecutor;
+        this.reactViteProjectInitializer = reactViteProjectInitializer;
     }
 
     public CodeGenerationOutput generateAndSaveCode(String userMessage, CodeGenTypeEnum codeGenType) {
@@ -56,11 +61,20 @@ public class AiCodeGeneratorFacade {
                 MultiFileCodeResult result = aiCodeGeneratorService.generateMultiFileCode(userMessage);
                 yield saveStructuredResult(result, CodeGenTypeEnum.HTML_MULTI, appId);
             }
-            default -> throw new BusinessException(ErrorCode.PARAMS_ERROR, "Unsupported code generation type");
+            case REACT_VITE -> throw new BusinessException(ErrorCode.PARAMS_ERROR,
+                    "REACT_VITE only supports streaming mode, use generateAndSaveCodeStream instead");
         };
     }
 
     public Flux<String> generateAndSaveCodeStream(String userMessage, CodeGenTypeEnum codeGenType, Long appId) {
+        if (codeGenType == CodeGenTypeEnum.REACT_VITE) {
+            // Tool-call mode: initialize skeleton, then let AI write files via FileWriteTool
+            if (appId != null) {
+                reactViteProjectInitializer.initializeProject(appId);
+            }
+            return aiCodeGeneratorService.generateReactViteProjectStream(appId, userMessage);
+        }
+
         Flux<String> codeStream = switch (codeGenType) {
             case HTML_SINGLE -> appId != null
                     ? aiCodeGeneratorService.generateHtmlCodeStream(appId, userMessage)
@@ -68,7 +82,7 @@ public class AiCodeGeneratorFacade {
             case HTML_MULTI -> appId != null
                     ? aiCodeGeneratorService.generateMultiFileCodeStream(appId, userMessage)
                     : aiCodeGeneratorService.generateMultiFileCodeStream(userMessage);
-            default -> throw new BusinessException(ErrorCode.PARAMS_ERROR, "Unsupported code generation type");
+            case REACT_VITE -> throw new IllegalStateException("Handled above");
         };
 
         StringBuilder rawResponseBuilder = new StringBuilder();
@@ -92,7 +106,8 @@ public class AiCodeGeneratorFacade {
         Flux<String> codeStream = switch (codeGenType) {
             case HTML_SINGLE -> aiCodeGeneratorService.generateHtmlCodeStream(userMessage);
             case HTML_MULTI -> aiCodeGeneratorService.generateMultiFileCodeStream(userMessage);
-            default -> throw new BusinessException(ErrorCode.PARAMS_ERROR, "Unsupported code generation type");
+            case REACT_VITE -> throw new BusinessException(ErrorCode.PARAMS_ERROR,
+                    "REACT_VITE only supports async streaming mode");
         };
 
         StringBuilder rawResponseBuilder = new StringBuilder();
@@ -136,7 +151,8 @@ public class AiCodeGeneratorFacade {
             codeStream = switch (codeGenType) {
                 case HTML_SINGLE -> aiCodeGeneratorService.generateHtmlCodeStream(userMessage);
                 case HTML_MULTI -> aiCodeGeneratorService.generateMultiFileCodeStream(userMessage);
-                default -> throw new BusinessException(ErrorCode.PARAMS_ERROR, "Unsupported code generation type");
+                case REACT_VITE -> throw new BusinessException(ErrorCode.PARAMS_ERROR,
+                        "REACT_VITE only supports reactive streaming mode");
             };
         } catch (Exception e) {
             if (onError != null) onError.accept(e);
@@ -214,7 +230,9 @@ public class AiCodeGeneratorFacade {
                 fileMap.put("style.css", result.getCssCode());
                 fileMap.put("script.js", result.getJsCode());
             }
-            default -> throw new BusinessException(ErrorCode.INTERNAL_ERROR, "Unsupported code generation type");
+            case REACT_VITE -> {
+                // REACT_VITE files are written by tool, not available as parsed result
+            }
         }
         return fileMap;
     }

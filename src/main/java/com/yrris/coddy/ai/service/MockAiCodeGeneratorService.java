@@ -62,6 +62,17 @@ public class MockAiCodeGeneratorService implements AiCodeGeneratorService {
     }
 
     @Override
+    public Flux<String> generateReactViteProjectStream(long appId, String userMessage) {
+        String content = "{\"type\":\"AI_RESPONSE\",\"data\":\"Mock React+Vite project generated for: "
+                + normalizePrompt(userMessage).replace("\"", "'") + "\"}\n"
+                + "{\"type\":\"TOOL_EXECUTED\",\"data\":{\"toolName\":\"writeFile\",\"result\":\"File written: src/main.jsx\"}}\n"
+                + "{\"type\":\"TOOL_EXECUTED\",\"data\":{\"toolName\":\"writeFile\",\"result\":\"File written: src/App.jsx\"}}\n"
+                + "{\"type\":\"TOOL_EXECUTED\",\"data\":{\"toolName\":\"writeFile\",\"result\":\"File written: src/index.css\"}}\n"
+                + "{\"type\":\"COMPLETE\",\"data\":\"\"}";
+        return buildStream(content);
+    }
+
+    @Override
     public Flux<String> generateMultiFileCodeStream(String userMessage) {
         String prompt = normalizePrompt(userMessage);
         String content = "```html\n"

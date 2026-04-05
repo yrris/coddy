@@ -14,10 +14,13 @@ import com.yrris.coddy.model.vo.AppVO;
 import com.yrris.coddy.model.vo.ChatHistoryVO;
 import com.yrris.coddy.model.vo.LoginUserVO;
 import com.yrris.coddy.model.vo.PageVO;
+import com.yrris.coddy.model.enums.CodeGenTypeEnum;
 import com.yrris.coddy.service.AppProjectService;
 import com.yrris.coddy.service.ChatHistoryService;
+import com.yrris.coddy.service.ProjectDownloadService;
 import com.yrris.coddy.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
@@ -41,16 +44,20 @@ public class AppProjectController {
 
     private final ObjectMapper objectMapper;
 
+    private final ProjectDownloadService projectDownloadService;
+
     public AppProjectController(
             AppProjectService appProjectService,
             ChatHistoryService chatHistoryService,
             UserService userService,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            ProjectDownloadService projectDownloadService
     ) {
         this.appProjectService = appProjectService;
         this.chatHistoryService = chatHistoryService;
         this.userService = userService;
         this.objectMapper = objectMapper;
+        this.projectDownloadService = projectDownloadService;
     }
 
     @PostMapping("/add")
@@ -153,11 +160,23 @@ public class AppProjectController {
         }
 
         LoginUserVO loginUser = userService.getLoginUser(httpServletRequest);
+
+        // Determine if this is a REACT_VITE app (stream contains typed JSON messages)
+        AppVO appVO = appProjectService.getAppVO(appId);
+        boolean isReactVite = "REACT_VITE".equals(appVO.getCodeGenType());
+
         Flux<String> contentFlux = appProjectService.chatToGenCode(appId, message, loginUser);
         return contentFlux
                 .map(chunk -> {
                     try {
-                        String payload = objectMapper.writeValueAsString(Map.of("d", chunk));
+                        String payload;
+                        if (isReactVite) {
+                            // Already JSON (StreamMessage), pass through directly
+                            payload = chunk;
+                        } else {
+                            // Legacy format: wrap in {"d": chunk}
+                            payload = objectMapper.writeValueAsString(Map.of("d", chunk));
+                        }
                         return ServerSentEvent.<String>builder().data(payload).build();
                     } catch (JsonProcessingException e) {
                         throw new BusinessException(ErrorCode.INTERNAL_ERROR, "Failed to encode stream chunk");
@@ -188,5 +207,49 @@ public class AppProjectController {
     ) {
         LoginUserVO loginUser = userService.getLoginUser(httpServletRequest);
         return ResultUtils.success(appProjectService.deployApp(request.getAppId(), loginUser));
+    }
+
+    @PostMapping("/screenshot")
+    @AuthCheck
+    public ApiResponse<String> generateScreenshot(
+            @Valid @RequestBody AppDeployRequest request,
+            HttpServletRequest httpServletRequest
+    ) {
+        LoginUserVO loginUser = userService.getLoginUser(httpServletRequest);
+        return ResultUtils.success(appProjectService.generateScreenshot(request.getAppId(), loginUser));
+    }
+
+    @GetMapping("/download/{appId}")
+    @AuthCheck
+    public void downloadProjectCode(
+            @PathVariable Long appId,
+            HttpServletRequest httpServletRequest,
+            HttpServletResponse httpServletResponse
+    ) {
+        if (appId == null || appId <= 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "Invalid app id");
+        }
+
+        LoginUserVO loginUser = userService.getLoginUser(httpServletRequest);
+        AppVO appVO = appProjectService.getAppVO(appId);
+
+        // Only owner can download
+        if (!loginUser.getId().equals(appVO.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "No permission to download this app");
+        }
+
+        CodeGenTypeEnum codeGenTypeEnum = CodeGenTypeEnum.fromValue(appVO.getCodeGenType());
+        if (codeGenTypeEnum == null) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "Unsupported code generation type");
+        }
+
+        httpServletResponse.setContentType("application/zip");
+        httpServletResponse.setHeader("Content-Disposition", "attachment; filename=\"app_" + appId + ".zip\"");
+
+        try {
+            projectDownloadService.writeProjectZip(appId, codeGenTypeEnum, httpServletResponse.getOutputStream());
+        } catch (Exception e) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "Download failed: " + e.getMessage());
+        }
     }
 }

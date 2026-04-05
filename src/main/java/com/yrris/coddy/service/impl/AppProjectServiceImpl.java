@@ -1,6 +1,9 @@
 package com.yrris.coddy.service.impl;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yrris.coddy.ai.facade.AiCodeGeneratorFacade;
+import com.yrris.coddy.ai.tool.ReactViteBuildService;
 import com.yrris.coddy.config.AppDeployProperties;
 import com.yrris.coddy.constant.AppConstant;
 import com.yrris.coddy.exception.BusinessException;
@@ -17,10 +20,12 @@ import com.yrris.coddy.repository.AppProjectRepository;
 import com.yrris.coddy.repository.AppUserRepository;
 import com.yrris.coddy.service.AppProjectService;
 import com.yrris.coddy.service.ChatHistoryService;
+import com.yrris.coddy.service.ScreenshotService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -29,6 +34,9 @@ import reactor.core.publisher.Flux;
 import java.io.IOException;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
@@ -36,6 +44,8 @@ import java.util.stream.Collectors;
 
 @Service
 public class AppProjectServiceImpl implements AppProjectService {
+
+    private static final Logger log = LoggerFactory.getLogger(AppProjectServiceImpl.class);
 
     private static final int USER_LIST_MAX_PAGE_SIZE = 20;
 
@@ -68,18 +78,30 @@ public class AppProjectServiceImpl implements AppProjectService {
 
     private final ChatHistoryService chatHistoryService;
 
+    private final ReactViteBuildService reactViteBuildService;
+
+    private final ObjectMapper objectMapper;
+
+    private final ScreenshotService screenshotService;
+
     public AppProjectServiceImpl(
             AppProjectRepository appProjectRepository,
             AppUserRepository appUserRepository,
             AiCodeGeneratorFacade aiCodeGeneratorFacade,
             AppDeployProperties appDeployProperties,
-            ChatHistoryService chatHistoryService
+            ChatHistoryService chatHistoryService,
+            ReactViteBuildService reactViteBuildService,
+            ObjectMapper objectMapper,
+            ScreenshotService screenshotService
     ) {
         this.appProjectRepository = appProjectRepository;
         this.appUserRepository = appUserRepository;
         this.aiCodeGeneratorFacade = aiCodeGeneratorFacade;
         this.appDeployProperties = appDeployProperties;
         this.chatHistoryService = chatHistoryService;
+        this.reactViteBuildService = reactViteBuildService;
+        this.objectMapper = objectMapper;
+        this.screenshotService = screenshotService;
     }
 
     @Override
@@ -252,10 +274,40 @@ public class AppProjectServiceImpl implements AppProjectService {
 
         // Generate code and save AI response on completion
         Flux<String> aiFlux = aiCodeGeneratorFacade.generateAndSaveCodeStream(message, codeGenTypeEnum, appProject.getId());
+
+        if (codeGenTypeEnum == CodeGenTypeEnum.REACT_VITE) {
+            // REACT_VITE: stream contains typed JSON messages, extract AI text for history
+            StringBuilder aiTextBuilder = new StringBuilder();
+            return aiFlux
+                    .doOnNext(chunk -> extractAiText(chunk, aiTextBuilder))
+                    .doOnComplete(() -> {
+                        chatHistoryService.saveChatMessage(appId, "ASSISTANT", aiTextBuilder.toString());
+                        // Trigger build after generation completes
+                        try {
+                            reactViteBuildService.buildProject(appId);
+                        } catch (Exception e) {
+                            log.warn("React build failed for appId={}: {}", appId, e.getMessage());
+                        }
+                    });
+        }
+
+        // HTML modes: collect raw stream for history
         StringBuilder aiResponseBuilder = new StringBuilder();
         return aiFlux
                 .doOnNext(aiResponseBuilder::append)
                 .doOnComplete(() -> chatHistoryService.saveChatMessage(appId, "ASSISTANT", aiResponseBuilder.toString()));
+    }
+
+    private void extractAiText(String jsonChunk, StringBuilder builder) {
+        try {
+            JsonNode node = objectMapper.readTree(jsonChunk);
+            String type = node.path("type").asText("");
+            if ("AI_RESPONSE".equals(type)) {
+                builder.append(node.path("data").asText(""));
+            }
+        } catch (Exception e) {
+            // Not valid JSON, ignore
+        }
     }
 
     @Override
@@ -277,7 +329,22 @@ public class AppProjectServiceImpl implements AppProjectService {
         }
 
         String sourceDirName = buildPreviewKey(codeGenTypeEnum, appId);
-        Path sourceDir = Paths.get(AppConstant.CODE_OUTPUT_ROOT_DIR, sourceDirName);
+        Path sourceDir;
+        if (codeGenTypeEnum == CodeGenTypeEnum.REACT_VITE) {
+            // For React projects, deploy only the built dist/ directory
+            Path projectDir = Paths.get(AppConstant.CODE_OUTPUT_ROOT_DIR, sourceDirName);
+            if (!Files.exists(projectDir) || !Files.isDirectory(projectDir)) {
+                throw new BusinessException(ErrorCode.NOT_FOUND, "Generated code does not exist, generate code first");
+            }
+            sourceDir = projectDir.resolve("dist");
+            if (!Files.exists(sourceDir)) {
+                // Build if dist/ not found
+                reactViteBuildService.buildProject(appId);
+                sourceDir = projectDir.resolve("dist");
+            }
+        } else {
+            sourceDir = Paths.get(AppConstant.CODE_OUTPUT_ROOT_DIR, sourceDirName);
+        }
         if (!Files.exists(sourceDir) || !Files.isDirectory(sourceDir)) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "Generated code does not exist, generate code first");
         }
@@ -300,7 +367,49 @@ public class AppProjectServiceImpl implements AppProjectService {
         appProject.setEditTime(Instant.now());
         appProjectRepository.save(appProject);
 
-        return normalizeHost(appDeployProperties.getHost()) + "/api/deployed/" + deployKey + "/";
+        String deployUrl = normalizeHost(appDeployProperties.getHost()) + "/api/deployed/" + deployKey + "/";
+        asyncGenerateScreenshot(appProject.getId(), deployUrl);
+        return deployUrl;
+    }
+
+    @Override
+    public String generateScreenshot(Long appId, LoginUserVO loginUser) {
+        if (appId == null || appId <= 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "App id is required");
+        }
+
+        AppProject appProject = getExistingApp(appId);
+        checkOwnerPermission(appProject, loginUser);
+
+        if (!StringUtils.hasText(appProject.getDeployKey())) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "App must be deployed before taking a screenshot");
+        }
+
+        String deployUrl = normalizeHost(appDeployProperties.getHost())
+                + "/api/deployed/" + appProject.getDeployKey() + "/";
+        screenshotService.takeScreenshot(deployUrl, appId);
+
+        String coverUrl = "/api/app/screenshot/image/" + appId + "?t=" + System.currentTimeMillis();
+        appProject.setCover(coverUrl);
+        appProject.setEditTime(Instant.now());
+        appProjectRepository.save(appProject);
+
+        return coverUrl;
+    }
+
+    @Async
+    public void asyncGenerateScreenshot(Long appId, String deployUrl) {
+        try {
+            screenshotService.takeScreenshot(deployUrl, appId);
+            String coverUrl = "/api/app/screenshot/image/" + appId + "?t=" + System.currentTimeMillis();
+            AppProject appProject = appProjectRepository.findByIdAndIsDeletedFalse(appId).orElse(null);
+            if (appProject != null) {
+                appProject.setCover(coverUrl);
+                appProjectRepository.save(appProject);
+            }
+        } catch (Exception e) {
+            log.warn("Async screenshot failed for appId={}: {}", appId, e.getMessage());
+        }
     }
 
     private String buildDefaultAppName(String initPrompt) {

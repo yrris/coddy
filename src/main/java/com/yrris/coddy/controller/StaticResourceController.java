@@ -39,7 +39,12 @@ public class StaticResourceController {
                 return new ResponseEntity<>(headers, HttpStatus.MOVED_PERMANENTLY);
             }
             if ("/".equals(resourcePath)) {
-                resourcePath = "/index.html";
+                // React projects serve from dist/index.html
+                if (previewKey.startsWith("react_vite_")) {
+                    resourcePath = "/dist/index.html";
+                } else {
+                    resourcePath = "/index.html";
+                }
             }
             if (resourcePath.contains("..")) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
@@ -48,6 +53,15 @@ public class StaticResourceController {
             String filePath = PREVIEW_ROOT_DIR + "/" + previewKey + resourcePath;
             File file = new File(filePath);
             if (!file.exists() || !file.isFile()) {
+                // SPA fallback for React projects: serve dist/index.html for client-side routes
+                if (previewKey.startsWith("react_vite_")) {
+                    File spaFallback = new File(PREVIEW_ROOT_DIR + "/" + previewKey + "/dist/index.html");
+                    if (spaFallback.exists()) {
+                        return ResponseEntity.ok()
+                                .header(HttpHeaders.CONTENT_TYPE, "text/html; charset=UTF-8")
+                                .body(new FileSystemResource(spaFallback));
+                    }
+                }
                 return ResponseEntity.notFound().build();
             }
 
@@ -78,6 +92,27 @@ public class StaticResourceController {
         }
         if (filePath.endsWith(".svg")) {
             return "image/svg+xml";
+        }
+        if (filePath.endsWith(".json")) {
+            return "application/json; charset=UTF-8";
+        }
+        if (filePath.endsWith(".jsx") || filePath.endsWith(".tsx") || filePath.endsWith(".mjs")) {
+            return "application/javascript; charset=UTF-8";
+        }
+        if (filePath.endsWith(".ico")) {
+            return "image/x-icon";
+        }
+        if (filePath.endsWith(".woff")) {
+            return "font/woff";
+        }
+        if (filePath.endsWith(".woff2")) {
+            return "font/woff2";
+        }
+        if (filePath.endsWith(".ttf")) {
+            return "font/ttf";
+        }
+        if (filePath.endsWith(".map")) {
+            return "application/json";
         }
         return MediaType.APPLICATION_OCTET_STREAM_VALUE;
     }

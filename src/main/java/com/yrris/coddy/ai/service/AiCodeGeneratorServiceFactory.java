@@ -2,6 +2,7 @@ package com.yrris.coddy.ai.service;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.yrris.coddy.ai.tool.FileWriteTool;
 import dev.langchain4j.community.store.memory.chat.redis.RedisChatMemoryStore;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
@@ -35,21 +36,29 @@ public class AiCodeGeneratorServiceFactory {
     private final StreamingChatModel streamingChatModel;
     private final RedisChatMemoryStore redisChatMemoryStore;
     private final ChatHistoryRepository chatHistoryRepository;
+    private final FileWriteTool fileWriteTool;
 
     private final Cache<Long, LangChain4jCodeGeneratorAgent> agentCache;
+    private final Cache<Long, LangChain4jReactViteAgent> reactViteAgentCache;
 
     public AiCodeGeneratorServiceFactory(
             ChatModel chatModel,
             StreamingChatModel streamingChatModel,
             RedisChatMemoryStore redisChatMemoryStore,
-            ChatHistoryRepository chatHistoryRepository
+            ChatHistoryRepository chatHistoryRepository,
+            FileWriteTool fileWriteTool
     ) {
         this.chatModel = chatModel;
         this.streamingChatModel = streamingChatModel;
         this.redisChatMemoryStore = redisChatMemoryStore;
         this.chatHistoryRepository = chatHistoryRepository;
+        this.fileWriteTool = fileWriteTool;
         this.agentCache = Caffeine.newBuilder()
                 .maximumSize(1000)
+                .expireAfterAccess(30, TimeUnit.MINUTES)
+                .build();
+        this.reactViteAgentCache = Caffeine.newBuilder()
+                .maximumSize(500)
                 .expireAfterAccess(30, TimeUnit.MINUTES)
                 .build();
     }
@@ -71,6 +80,25 @@ public class AiCodeGeneratorServiceFactory {
                                 .chatMemoryStore(redisChatMemoryStore)
                                 .build()
                 )
+                .build();
+    }
+
+    public LangChain4jReactViteAgent getReactViteAgent(long appId) {
+        return reactViteAgentCache.get(appId, this::createReactViteAgent);
+    }
+
+    private LangChain4jReactViteAgent createReactViteAgent(long appId) {
+        seedMemoryFromDatabase(appId);
+        return AiServices.builder(LangChain4jReactViteAgent.class)
+                .streamingChatModel(streamingChatModel)
+                .chatMemoryProvider(memoryId ->
+                        MessageWindowChatMemory.builder()
+                                .id(memoryId)
+                                .maxMessages(MAX_MEMORY_MESSAGES)
+                                .chatMemoryStore(redisChatMemoryStore)
+                                .build()
+                )
+                .tools(fileWriteTool)
                 .build();
     }
 

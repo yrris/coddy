@@ -50,6 +50,8 @@ public class CodeFileSaverExecutor {
                 yield htmlMultiCodeFileSaver.saveCode((com.yrris.coddy.ai.model.MultiFileCodeResult) codeResult,
                         CodeGenTypeEnum.HTML_MULTI, appId);
             }
+            case REACT_VITE -> throw new BusinessException(ErrorCode.INTERNAL_ERROR,
+                    "REACT_VITE uses tool-call mode, files are written by FileWriteTool");
         };
     }
 }
