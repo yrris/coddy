@@ -28,6 +28,14 @@ public class AppVO {
 
     private LoginUserVO user;
 
+    private Boolean isPublic;
+
+    private Boolean isFeatured;
+
+    private Integer likeCount;
+
+    private Boolean hasLiked;
+
     private String previewKey;
 
     public Long getId() {
@@ -124,6 +132,38 @@ public class AppVO {
 
     public void setUser(LoginUserVO user) {
         this.user = user;
+    }
+
+    public Boolean getIsPublic() {
+        return isPublic;
+    }
+
+    public void setIsPublic(Boolean isPublic) {
+        this.isPublic = isPublic;
+    }
+
+    public Boolean getIsFeatured() {
+        return isFeatured;
+    }
+
+    public void setIsFeatured(Boolean isFeatured) {
+        this.isFeatured = isFeatured;
+    }
+
+    public Integer getLikeCount() {
+        return likeCount;
+    }
+
+    public void setLikeCount(Integer likeCount) {
+        this.likeCount = likeCount;
+    }
+
+    public Boolean getHasLiked() {
+        return hasLiked;
+    }
+
+    public void setHasLiked(Boolean hasLiked) {
+        this.hasLiked = hasLiked;
     }
 
     public String getPreviewKey() {

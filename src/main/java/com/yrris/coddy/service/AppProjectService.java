@@ -33,4 +33,18 @@ public interface AppProjectService {
     String deployApp(Long appId, LoginUserVO loginUser);
 
     String generateScreenshot(Long appId, LoginUserVO loginUser);
+
+    boolean publishApp(Long appId, LoginUserVO loginUser);
+
+    boolean unpublishApp(Long appId, LoginUserVO loginUser);
+
+    PageVO<AppVO> listPublicApps(AppQueryRequest request, Long currentUserId);
+
+    PageVO<AppVO> listFeaturedApps(AppQueryRequest request, Long currentUserId);
+
+    boolean featureApp(Long appId);
+
+    boolean unfeatureApp(Long appId);
+
+    PageVO<AppVO> listMyLikedApps(AppQueryRequest request, LoginUserVO loginUser);
 }

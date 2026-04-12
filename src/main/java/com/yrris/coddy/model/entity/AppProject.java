@@ -49,6 +49,15 @@ public class AppProject {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    @Column(name = "is_public", nullable = false)
+    private Boolean isPublic = false;
+
+    @Column(name = "is_featured", nullable = false)
+    private Boolean isFeatured = false;
+
+    @Column(name = "like_count", nullable = false)
+    private Integer likeCount = 0;
+
     @Column(name = "is_deleted", nullable = false)
     private Boolean isDeleted = false;
 
@@ -146,6 +155,30 @@ public class AppProject {
 
     public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public Boolean getIsPublic() {
+        return isPublic;
+    }
+
+    public void setIsPublic(Boolean isPublic) {
+        this.isPublic = isPublic;
+    }
+
+    public Boolean getIsFeatured() {
+        return isFeatured;
+    }
+
+    public void setIsFeatured(Boolean isFeatured) {
+        this.isFeatured = isFeatured;
+    }
+
+    public Integer getLikeCount() {
+        return likeCount;
+    }
+
+    public void setLikeCount(Integer likeCount) {
+        this.likeCount = likeCount;
     }
 
     public Boolean getIsDeleted() {

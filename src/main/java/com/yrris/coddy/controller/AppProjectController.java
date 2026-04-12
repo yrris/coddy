@@ -15,6 +15,7 @@ import com.yrris.coddy.model.vo.ChatHistoryVO;
 import com.yrris.coddy.model.vo.LoginUserVO;
 import com.yrris.coddy.model.vo.PageVO;
 import com.yrris.coddy.model.enums.CodeGenTypeEnum;
+import com.yrris.coddy.service.AppLikeService;
 import com.yrris.coddy.service.AppProjectService;
 import com.yrris.coddy.service.ChatHistoryService;
 import com.yrris.coddy.service.ProjectDownloadService;
@@ -22,6 +23,8 @@ import com.yrris.coddy.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import com.yrris.coddy.ratelimit.annotation.RateLimit;
+import com.yrris.coddy.ratelimit.enums.RateLimitType;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.util.StringUtils;
@@ -46,18 +49,22 @@ public class AppProjectController {
 
     private final ProjectDownloadService projectDownloadService;
 
+    private final AppLikeService appLikeService;
+
     public AppProjectController(
             AppProjectService appProjectService,
             ChatHistoryService chatHistoryService,
             UserService userService,
             ObjectMapper objectMapper,
-            ProjectDownloadService projectDownloadService
+            ProjectDownloadService projectDownloadService,
+            AppLikeService appLikeService
     ) {
         this.appProjectService = appProjectService;
         this.chatHistoryService = chatHistoryService;
         this.userService = userService;
         this.objectMapper = objectMapper;
         this.projectDownloadService = projectDownloadService;
+        this.appLikeService = appLikeService;
     }
 
     @PostMapping("/add")
@@ -107,6 +114,98 @@ public class AppProjectController {
         return ResultUtils.success(appProjectService.listGoodApps(request));
     }
 
+    @PostMapping("/publish")
+    @AuthCheck
+    public ApiResponse<Boolean> publishApp(
+            @Valid @RequestBody DeleteRequest request,
+            HttpServletRequest httpServletRequest
+    ) {
+        LoginUserVO loginUser = userService.getLoginUser(httpServletRequest);
+        return ResultUtils.success(appProjectService.publishApp(request.getId(), loginUser));
+    }
+
+    @PostMapping("/unpublish")
+    @AuthCheck
+    public ApiResponse<Boolean> unpublishApp(
+            @Valid @RequestBody DeleteRequest request,
+            HttpServletRequest httpServletRequest
+    ) {
+        LoginUserVO loginUser = userService.getLoginUser(httpServletRequest);
+        return ResultUtils.success(appProjectService.unpublishApp(request.getId(), loginUser));
+    }
+
+    @PostMapping("/like")
+    @AuthCheck
+    public ApiResponse<Boolean> likeApp(
+            @Valid @RequestBody DeleteRequest request,
+            HttpServletRequest httpServletRequest
+    ) {
+        LoginUserVO loginUser = userService.getLoginUser(httpServletRequest);
+        return ResultUtils.success(appLikeService.likeApp(request.getId(), loginUser));
+    }
+
+    @PostMapping("/unlike")
+    @AuthCheck
+    public ApiResponse<Boolean> unlikeApp(
+            @Valid @RequestBody DeleteRequest request,
+            HttpServletRequest httpServletRequest
+    ) {
+        LoginUserVO loginUser = userService.getLoginUser(httpServletRequest);
+        return ResultUtils.success(appLikeService.unlikeApp(request.getId(), loginUser));
+    }
+
+    @PostMapping("/public/list/page/vo")
+    public ApiResponse<PageVO<AppVO>> listPublicApps(
+            @RequestBody(required = false) AppQueryRequest request,
+            HttpServletRequest httpServletRequest
+    ) {
+        Long currentUserId = null;
+        try {
+            LoginUserVO loginUser = userService.getLoginUser(httpServletRequest);
+            currentUserId = loginUser.getId();
+        } catch (Exception ignored) {
+            // Not logged in — hasLiked will be false
+        }
+        return ResultUtils.success(appProjectService.listPublicApps(request, currentUserId));
+    }
+
+    @PostMapping("/featured/list")
+    public ApiResponse<PageVO<AppVO>> listFeaturedApps(
+            @RequestBody(required = false) AppQueryRequest request,
+            HttpServletRequest httpServletRequest
+    ) {
+        Long currentUserId = null;
+        try {
+            LoginUserVO loginUser = userService.getLoginUser(httpServletRequest);
+            currentUserId = loginUser.getId();
+        } catch (Exception ignored) {
+            // Not logged in — hasLiked will be false
+        }
+        return ResultUtils.success(appProjectService.listFeaturedApps(request, currentUserId));
+    }
+
+    @PostMapping("/my/liked/list/page/vo")
+    @AuthCheck
+    public ApiResponse<PageVO<AppVO>> listMyLikedApps(
+            @RequestBody(required = false) AppQueryRequest request,
+            HttpServletRequest httpServletRequest
+    ) {
+        LoginUserVO loginUser = userService.getLoginUser(httpServletRequest);
+        return ResultUtils.success(appProjectService.listMyLikedApps(request, loginUser));
+    }
+
+    @PostMapping("/admin/feature")
+    @AuthCheck(mustRole = "ADMIN")
+    public ApiResponse<Boolean> featureApp(@Valid @RequestBody DeleteRequest request) {
+        return ResultUtils.success(appProjectService.featureApp(request.getId()));
+    }
+
+    @PostMapping("/admin/unfeature")
+    @AuthCheck(mustRole = "ADMIN")
+    public ApiResponse<Boolean> unfeatureApp(@Valid @RequestBody DeleteRequest request) {
+        return ResultUtils.success(appProjectService.unfeatureApp(request.getId()));
+    }
+
     @PostMapping("/admin/delete")
     @AuthCheck(mustRole = "ADMIN")
     public ApiResponse<Boolean> deleteAppByAdmin(@Valid @RequestBody DeleteRequest request) {
@@ -147,6 +246,8 @@ public class AppProjectController {
 
     @GetMapping(value = "/chat/gen/code", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @AuthCheck
+    @RateLimit(limitType = RateLimitType.USER, rate = 5, rateInterval = 60,
+            message = "AI requests too frequent, please try again later")
     public Flux<ServerSentEvent<String>> chatToGenCode(
             @RequestParam Long appId,
             @RequestParam String message,

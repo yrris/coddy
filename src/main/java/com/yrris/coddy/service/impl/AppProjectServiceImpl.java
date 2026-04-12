@@ -18,6 +18,7 @@ import com.yrris.coddy.model.vo.LoginUserVO;
 import com.yrris.coddy.model.vo.PageVO;
 import com.yrris.coddy.repository.AppProjectRepository;
 import com.yrris.coddy.repository.AppUserRepository;
+import com.yrris.coddy.service.AppLikeService;
 import com.yrris.coddy.service.AppProjectService;
 import com.yrris.coddy.service.ChatHistoryService;
 import com.yrris.coddy.service.ScreenshotService;
@@ -65,7 +66,8 @@ public class AppProjectServiceImpl implements AppProjectService {
             "createTime",
             "updateTime",
             "deployedTime",
-            "editTime"
+            "editTime",
+            "likeCount"
     );
 
     private final AppProjectRepository appProjectRepository;
@@ -84,6 +86,8 @@ public class AppProjectServiceImpl implements AppProjectService {
 
     private final ScreenshotService screenshotService;
 
+    private final AppLikeService appLikeService;
+
     public AppProjectServiceImpl(
             AppProjectRepository appProjectRepository,
             AppUserRepository appUserRepository,
@@ -92,7 +96,8 @@ public class AppProjectServiceImpl implements AppProjectService {
             ChatHistoryService chatHistoryService,
             ReactViteBuildService reactViteBuildService,
             ObjectMapper objectMapper,
-            ScreenshotService screenshotService
+            ScreenshotService screenshotService,
+            AppLikeService appLikeService
     ) {
         this.appProjectRepository = appProjectRepository;
         this.appUserRepository = appUserRepository;
@@ -102,6 +107,7 @@ public class AppProjectServiceImpl implements AppProjectService {
         this.reactViteBuildService = reactViteBuildService;
         this.objectMapper = objectMapper;
         this.screenshotService = screenshotService;
+        this.appLikeService = appLikeService;
     }
 
     @Override
@@ -397,6 +403,120 @@ public class AppProjectServiceImpl implements AppProjectService {
         return coverUrl;
     }
 
+    @Override
+    @Transactional
+    public boolean publishApp(Long appId, LoginUserVO loginUser) {
+        if (appId == null || appId <= 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "App id is required");
+        }
+
+        AppProject appProject = getExistingApp(appId);
+        checkOwnerPermission(appProject, loginUser);
+
+        if (!StringUtils.hasText(appProject.getDeployKey())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "App must be deployed before publishing");
+        }
+
+        appProject.setIsPublic(true);
+        appProject.setEditTime(Instant.now());
+        appProjectRepository.save(appProject);
+        return true;
+    }
+
+    @Override
+    @Transactional
+    public boolean unpublishApp(Long appId, LoginUserVO loginUser) {
+        if (appId == null || appId <= 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "App id is required");
+        }
+
+        AppProject appProject = getExistingApp(appId);
+        checkOwnerPermission(appProject, loginUser);
+
+        appProject.setIsPublic(false);
+        appProject.setIsFeatured(false);
+        appProject.setEditTime(Instant.now());
+        appProjectRepository.save(appProject);
+        return true;
+    }
+
+    @Override
+    public PageVO<AppVO> listPublicApps(AppQueryRequest request, Long currentUserId) {
+        validateUserPageSize(request);
+        if (request == null) {
+            request = new AppQueryRequest();
+        }
+        request.setIsPublic(true);
+
+        PageRequest pageRequest = buildPageRequest(request, true);
+        Specification<AppProject> specification = buildSpecification(request, null, false);
+        Page<AppProject> appPage = appProjectRepository.findAll(specification, pageRequest);
+
+        return toPageVOWithLikes(appPage, pageRequest, currentUserId);
+    }
+
+    @Override
+    public PageVO<AppVO> listFeaturedApps(AppQueryRequest request, Long currentUserId) {
+        validateUserPageSize(request);
+        if (request == null) {
+            request = new AppQueryRequest();
+        }
+        request.setIsPublic(true);
+        request.setIsFeatured(true);
+
+        PageRequest pageRequest = buildPageRequest(request, true);
+        Specification<AppProject> specification = buildSpecification(request, null, false);
+        Page<AppProject> appPage = appProjectRepository.findAll(specification, pageRequest);
+
+        return toPageVOWithLikes(appPage, pageRequest, currentUserId);
+    }
+
+    @Override
+    @Transactional
+    public boolean featureApp(Long appId) {
+        if (appId == null || appId <= 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "App id is required");
+        }
+
+        AppProject appProject = getExistingApp(appId);
+
+        if (!Boolean.TRUE.equals(appProject.getIsPublic())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "Can only feature public apps");
+        }
+
+        appProject.setIsFeatured(true);
+        appProject.setEditTime(Instant.now());
+        appProjectRepository.save(appProject);
+        return true;
+    }
+
+    @Override
+    @Transactional
+    public boolean unfeatureApp(Long appId) {
+        if (appId == null || appId <= 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "App id is required");
+        }
+
+        AppProject appProject = getExistingApp(appId);
+        appProject.setIsFeatured(false);
+        appProject.setEditTime(Instant.now());
+        appProjectRepository.save(appProject);
+        return true;
+    }
+
+    @Override
+    public PageVO<AppVO> listMyLikedApps(AppQueryRequest request, LoginUserVO loginUser) {
+        if (loginUser == null || loginUser.getId() == null) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED, "Login required");
+        }
+        validateUserPageSize(request);
+
+        PageRequest pageRequest = buildPageRequest(request, true);
+        Page<AppProject> appPage = appProjectRepository.findLikedByUser(loginUser.getId(), pageRequest);
+
+        return toPageVOWithLikes(appPage, pageRequest, loginUser.getId());
+    }
+
     @Async
     public void asyncGenerateScreenshot(Long appId, String deployUrl) {
         try {
@@ -481,6 +601,7 @@ public class AppProjectServiceImpl implements AppProjectService {
             case "updateTime" -> "updatedAt";
             case "deployedTime" -> "deployedTime";
             case "editTime" -> "editTime";
+            case "likeCount" -> "likeCount";
             default -> "id";
         };
 
@@ -539,6 +660,12 @@ public class AppProjectServiceImpl implements AppProjectService {
                 if (fixedUserId == null && request.getUserId() != null) {
                     predicates.add(cb.equal(root.get("ownerUserId"), request.getUserId()));
                 }
+                if (request.getIsPublic() != null) {
+                    predicates.add(cb.equal(root.get("isPublic"), request.getIsPublic()));
+                }
+                if (request.getIsFeatured() != null) {
+                    predicates.add(cb.equal(root.get("isFeatured"), request.getIsFeatured()));
+                }
             }
 
             return cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
@@ -551,6 +678,29 @@ public class AppProjectServiceImpl implements AppProjectService {
 
         List<AppVO> records = appProjects.stream()
                 .map(app -> toAppVO(app, userVOMap))
+                .collect(Collectors.toList());
+
+        PageVO<AppVO> pageVO = new PageVO<>();
+        pageVO.setPageNum(pageRequest.getPageNumber() + 1L);
+        pageVO.setPageSize(pageRequest.getPageSize());
+        pageVO.setTotalRow(appPage.getTotalElements());
+        pageVO.setRecords(records);
+        return pageVO;
+    }
+
+    private PageVO<AppVO> toPageVOWithLikes(Page<AppProject> appPage, PageRequest pageRequest, Long currentUserId) {
+        List<AppProject> appProjects = appPage.getContent();
+        Map<Long, LoginUserVO> userVOMap = getUserVOMap(appProjects);
+
+        Set<Long> appIds = appProjects.stream().map(AppProject::getId).collect(Collectors.toSet());
+        Set<Long> likedAppIds = appLikeService.getLikedAppIds(currentUserId, appIds);
+
+        List<AppVO> records = appProjects.stream()
+                .map(app -> {
+                    AppVO vo = toAppVO(app, userVOMap);
+                    vo.setHasLiked(likedAppIds.contains(app.getId()));
+                    return vo;
+                })
                 .collect(Collectors.toList());
 
         PageVO<AppVO> pageVO = new PageVO<>();
@@ -597,6 +747,9 @@ public class AppProjectServiceImpl implements AppProjectService {
         appVO.setDeployedTime(appProject.getDeployedTime());
         appVO.setPriority(appProject.getPriority());
         appVO.setUserId(appProject.getOwnerUserId());
+        appVO.setIsPublic(appProject.getIsPublic());
+        appVO.setIsFeatured(appProject.getIsFeatured());
+        appVO.setLikeCount(appProject.getLikeCount());
         appVO.setCreateTime(appProject.getCreatedAt());
         appVO.setUpdateTime(appProject.getUpdatedAt());
         appVO.setUser(userVOMap.get(appProject.getOwnerUserId()));

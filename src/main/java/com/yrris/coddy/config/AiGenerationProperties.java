@@ -15,7 +15,6 @@ public class AiGenerationProperties {
 
     private String model = "gpt-5.4-mini";
 
-//    private int maxTokens = 4096;
     private int maxCompletionTokens = 8192;
 
     private double temperature = 0.2;
@@ -58,18 +57,12 @@ public class AiGenerationProperties {
         this.model = model;
     }
 
-//    public int getMaxTokens() {
-//        return maxTokens;
-//    }
-//
-//    public void setMaxTokens(int maxTokens) {
-//        this.maxTokens = maxTokens;
-//    }
 
     public int getMaxCompletionTokens() {
         return maxCompletionTokens;
     }
-    public void setMaxTokens(int maxCompletionTokens) {
+    
+    public void setMaxCompletionTokens(int maxCompletionTokens) {
         this.maxCompletionTokens = maxCompletionTokens;
     }
 

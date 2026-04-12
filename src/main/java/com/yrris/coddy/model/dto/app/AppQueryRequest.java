@@ -20,6 +20,10 @@ public class AppQueryRequest extends PageQueryRequest {
 
     private Long userId;
 
+    private Boolean isPublic;
+
+    private Boolean isFeatured;
+
     public Long getId() {
         return id;
     }
@@ -82,5 +86,21 @@ public class AppQueryRequest extends PageQueryRequest {
 
     public void setUserId(Long userId) {
         this.userId = userId;
+    }
+
+    public Boolean getIsPublic() {
+        return isPublic;
+    }
+
+    public void setIsPublic(Boolean isPublic) {
+        this.isPublic = isPublic;
+    }
+
+    public Boolean getIsFeatured() {
+        return isFeatured;
+    }
+
+    public void setIsFeatured(Boolean isFeatured) {
+        this.isFeatured = isFeatured;
     }
 }
