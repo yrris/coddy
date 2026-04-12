@@ -2,7 +2,11 @@ package com.yrris.coddy.ai.service;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.yrris.coddy.ai.guardrail.PromptSafetyInputGuardrail;
+import com.yrris.coddy.ai.guardrail.RetryOutputGuardrail;
+import com.yrris.coddy.ai.tool.ExitTool;
 import com.yrris.coddy.ai.tool.FileWriteTool;
+import com.yrris.coddy.config.SpringContextUtil;
 import dev.langchain4j.community.store.memory.chat.redis.RedisChatMemoryStore;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
@@ -32,27 +36,24 @@ public class AiCodeGeneratorServiceFactory {
 
     private static final int MAX_MEMORY_MESSAGES = 20;
 
-    private final ChatModel chatModel;
-    private final StreamingChatModel streamingChatModel;
     private final RedisChatMemoryStore redisChatMemoryStore;
     private final ChatHistoryRepository chatHistoryRepository;
     private final FileWriteTool fileWriteTool;
+    private final ExitTool exitTool;
 
     private final Cache<Long, LangChain4jCodeGeneratorAgent> agentCache;
     private final Cache<Long, LangChain4jReactViteAgent> reactViteAgentCache;
 
     public AiCodeGeneratorServiceFactory(
-            ChatModel chatModel,
-            StreamingChatModel streamingChatModel,
             RedisChatMemoryStore redisChatMemoryStore,
             ChatHistoryRepository chatHistoryRepository,
-            FileWriteTool fileWriteTool
+            FileWriteTool fileWriteTool,
+            ExitTool exitTool
     ) {
-        this.chatModel = chatModel;
-        this.streamingChatModel = streamingChatModel;
         this.redisChatMemoryStore = redisChatMemoryStore;
         this.chatHistoryRepository = chatHistoryRepository;
         this.fileWriteTool = fileWriteTool;
+        this.exitTool = exitTool;
         this.agentCache = Caffeine.newBuilder()
                 .maximumSize(1000)
                 .expireAfterAccess(30, TimeUnit.MINUTES)
@@ -70,6 +71,10 @@ public class AiCodeGeneratorServiceFactory {
     private LangChain4jCodeGeneratorAgent createAgent(long appId) {
         seedMemoryFromDatabase(appId);
 
+        // Use prototype-scoped ChatModel instances to support concurrent AI calls
+        ChatModel chatModel = SpringContextUtil.getBean("chatModelPrototype", ChatModel.class);
+        StreamingChatModel streamingChatModel = SpringContextUtil.getBean("streamingChatModelPrototype", StreamingChatModel.class);
+
         return AiServices.builder(LangChain4jCodeGeneratorAgent.class)
                 .chatModel(chatModel)
                 .streamingChatModel(streamingChatModel)
@@ -80,6 +85,7 @@ public class AiCodeGeneratorServiceFactory {
                                 .chatMemoryStore(redisChatMemoryStore)
                                 .build()
                 )
+                .inputGuardrails(new PromptSafetyInputGuardrail())
                 .build();
     }
 
@@ -89,6 +95,10 @@ public class AiCodeGeneratorServiceFactory {
 
     private LangChain4jReactViteAgent createReactViteAgent(long appId) {
         seedMemoryFromDatabase(appId);
+
+        // Use prototype-scoped StreamingChatModel to support concurrent AI calls
+        StreamingChatModel streamingChatModel = SpringContextUtil.getBean("streamingChatModelPrototype", StreamingChatModel.class);
+
         return AiServices.builder(LangChain4jReactViteAgent.class)
                 .streamingChatModel(streamingChatModel)
                 .chatMemoryProvider(memoryId ->
@@ -98,7 +108,9 @@ public class AiCodeGeneratorServiceFactory {
                                 .chatMemoryStore(redisChatMemoryStore)
                                 .build()
                 )
-                .tools(fileWriteTool)
+                .tools(fileWriteTool, exitTool)
+                .maxSequentialToolsInvocations(20)
+                .inputGuardrails(new PromptSafetyInputGuardrail())
                 .build();
     }
 

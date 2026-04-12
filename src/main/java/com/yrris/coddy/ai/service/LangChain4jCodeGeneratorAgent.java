@@ -4,6 +4,7 @@ import com.yrris.coddy.ai.model.HtmlCodeResult;
 import com.yrris.coddy.ai.model.MultiFileCodeResult;
 import dev.langchain4j.service.MemoryId;
 import dev.langchain4j.service.SystemMessage;
+import dev.langchain4j.service.UserMessage;
 import reactor.core.publisher.Flux;
 
 /**
@@ -21,8 +22,8 @@ public interface LangChain4jCodeGeneratorAgent {
     MultiFileCodeResult generateMultiFileCode(@MemoryId long memoryId, String userMessage);
 
     @SystemMessage(fromResource = "prompt/codegen-html-single-stream-system-prompt.txt")
-    Flux<String> generateHtmlCodeStream(@MemoryId long memoryId, String userMessage);
+    Flux<String> generateHtmlCodeStream(@MemoryId long memoryId,@UserMessage String userMessage);
 
     @SystemMessage(fromResource = "prompt/codegen-html-multi-stream-system-prompt.txt")
-    Flux<String> generateMultiFileCodeStream(@MemoryId long memoryId, String userMessage);
+    Flux<String> generateMultiFileCodeStream(@MemoryId long memoryId,@UserMessage String userMessage);
 }

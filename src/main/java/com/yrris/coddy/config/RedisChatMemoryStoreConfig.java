@@ -16,16 +16,16 @@ public class RedisChatMemoryStoreConfig {
             @Value("${spring.data.redis.port:6379}") Integer port,
             @Value("${spring.data.redis.password:}") String password
     ) {
-        RedisChatMemoryStore.Builder builder = RedisChatMemoryStore.builder()
-                .host(host)
-                .port(port)
-                .prefix("coddy:chat_memory:")
-                .ttl(7 * 24 * 60 * 60L); // 7 days in seconds
+         RedisChatMemoryStore.Builder builder = RedisChatMemoryStore.builder()
+                 .host(host)
+                 .port(port)
+                 .prefix("coddy:chat_memory:")
+                 .ttl(7 * 24 * 60 * 60L); // 7 days in seconds
 
-        if (password != null && !password.isBlank()) {
-            builder.password(password);
-        }
-
-        return builder.build();
+         if (password != null && !password.isBlank()) {
+             builder.user("default"); //redis acl
+             builder.password(password);
+         }
+         return builder.build();
     }
 }

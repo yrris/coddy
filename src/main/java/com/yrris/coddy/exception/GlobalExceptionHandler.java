@@ -1,7 +1,10 @@
 package com.yrris.coddy.exception;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yrris.coddy.common.ApiResponse;
 import com.yrris.coddy.common.ResultUtils;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,16 +20,31 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.server.ResponseStatusException;
+
+import java.io.IOException;
+import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    private final ObjectMapper objectMapper;
+
+    public GlobalExceptionHandler(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
+
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException ex) {
         log.warn("Business exception: {}", ex.getMessage());
+        // Try to handle as SSE request
+        if (handleSseError(ex.getCode(), ex.getMessage())) {
+            return null;
+        }
         if (ex.getCode() == ErrorCode.UNAUTHORIZED.getCode()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ResultUtils.error(ex.getCode(), ex.getMessage()));
         }
@@ -106,7 +124,46 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleException(Exception ex) {
         log.error("Unhandled exception", ex);
+        if (handleSseError(ErrorCode.INTERNAL_ERROR.getCode(), "Internal server error")) {
+            return null;
+        }
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ResultUtils.error(ErrorCode.INTERNAL_ERROR));
+    }
+
+    private boolean handleSseError(int errorCode, String errorMessage) {
+        ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        if (attributes == null) {
+            return false;
+        }
+        HttpServletRequest request = attributes.getRequest();
+        HttpServletResponse response = attributes.getResponse();
+        String accept = request.getHeader("Accept");
+        String uri = request.getRequestURI();
+        if ((accept != null && accept.contains("text/event-stream")) ||
+                uri.contains("/chat/gen/code")) {
+            try {
+                response.setContentType("text/event-stream");
+                response.setCharacterEncoding("UTF-8");
+                response.setHeader("Cache-Control", "no-cache");
+                response.setHeader("Connection", "keep-alive");
+                Map<String, Object> errorData = Map.of(
+                        "error", true,
+                        "code", errorCode,
+                        "message", errorMessage
+                );
+                String errorJson = objectMapper.writeValueAsString(errorData);
+                String sseData = "event: business-error\ndata: " + errorJson + "\n\n";
+                response.getWriter().write(sseData);
+                response.getWriter().flush();
+                response.getWriter().write("event: done\ndata: {}\n\n");
+                response.getWriter().flush();
+                return true;
+            } catch (IOException ioException) {
+                log.error("Failed to write SSE error response", ioException);
+                return true;
+            }
+        }
+        return false;
     }
 }
